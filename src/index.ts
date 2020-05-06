@@ -171,6 +171,7 @@ class Game {
             this.currentPage = { type: "Menu" };
             this.render();
           });
+        return;
       case "Play":
         // If we're in a campaign we render that view, otherwise we show a list of your campaigns
         if (this.currentPage.type === "Play" && this.currentPage.gameID) {
