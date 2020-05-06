@@ -24,7 +24,8 @@ program.outputHelp();
 type PageProps =
   | { type: "SignIn"; username?: string; password?: string }
   | { type: "Menu" | "Loading" }
-  | { type: "Create"; name?: string; race?: string; class?: string };
+  | { type: "Create"; name?: string; race?: string; class?: string }
+  | { type: "Play"; gameID?: number };
 
 class Game {
   private gameState?: GameState;
@@ -109,6 +110,7 @@ class Game {
         return;
       }
       case "Menu":
+        if (!this.gameState) this.socketService.requestBuilders.update();
         inquirer
           .prompt({
             type: listType,
@@ -116,12 +118,17 @@ class Game {
             choices: [
               { name: "Create character", value: "Create" },
               { name: "Join game", value: "Join" },
+              { name: "Play game", value: "Play" },
             ],
           })
           .then(({ action }) => {
             switch (action) {
               case "Create":
                 this.currentPage = { type: "Create" };
+                this.render();
+                return;
+              case "Play":
+                this.currentPage = { type: "Play" };
                 this.render();
                 return;
             }
@@ -132,25 +139,19 @@ class Game {
           .prompt([
             {
               type: "text",
-              message: "Hvad skal din nye karakter hedde?",
+              message: "What is the name of your new character?",
               name: "name",
             },
             {
               type: listType,
               name: "race",
-              message: "Hvilken race skal din nye karakter have?",
-              choices: [
-                { title: "Dværg", value: "Dwarf" },
-                { title: "Elf", value: "Elf" },
-                { title: "Dragefødt", value: "Dragonborn" },
-                { title: "Menneske", value: "Human" },
-                { title: "Ork", value: "Orc" },
-              ],
+              message: "What race is your new character",
+              choices: ["Dwarf", "Elf", "Dragonborn", "Human", "Orc"],
             },
             {
               type: listType,
               name: "cClass",
-              message: "Hvilken race skal din nye karakter have?",
+              message: "What class is your new character?",
               choices: [
                 "Accountant",
                 "Bard",
@@ -161,13 +162,41 @@ class Game {
               ],
             },
           ])
-          .then(({ name, race, cClass }) =>
+          .then(({ name, race, cClass }) => {
             this.socketService.requestBuilders.character.create({
               name,
               race,
               characterClass: cClass,
-            })
-          );
+            });
+            this.currentPage = { type: "Menu" };
+            this.render();
+          });
+      case "Play":
+        // If we're in a campaign we render that view, otherwise we show a list of your campaigns
+        if (this.currentPage.type === "Play" && this.currentPage.gameID) {
+        } else
+          inquirer
+            .prompt([
+              {
+                type: listType,
+                message: "What game do you want to join?",
+                name: "choice",
+                choices: [
+                  ...(this.gameState?.joinedCampaigns.map((j) => ({
+                    name: j.name,
+                    value: j.ID,
+                  })) ?? []),
+                  { type: "separator", name: "space" },
+                  { type: listType, name: "Back", value: "Back" },
+                ],
+              },
+            ])
+            .then(({ choice }) => {
+              if (choice === "Back") {
+                this.currentPage = { type: "Menu" };
+                this.render();
+              }
+            });
         return;
     }
   }
