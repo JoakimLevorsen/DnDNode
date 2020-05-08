@@ -59,12 +59,25 @@ class Game {
     (newGameState) => {
       this.gameState = newGameState;
       this.render();
+    },
+    (roll) => {
+      // This means we get the current dice rolls for this campaign, and add it to the list
+      const currentRolls = this.gameState?.diceRolls?.[roll.campaign];
+      if (currentRolls) {
+        this.gameState!.diceRolls[roll.campaign] = [roll, ...currentRolls]
+          .sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          )
+          .slice(0, 5);
+        this.render();
+      }
     }
   );
   // What page do we display now
   private currentPage: PageProps = { type: "Loading" };
 
   public get title() {
+    console.log("Has gotten messages", this.socketService.recivedMessages);
     switch (this.currentPage.type) {
       case "Create":
         return chalk.green(figlet.textSync("Create character"));
@@ -175,7 +188,40 @@ class Game {
       case "Play":
         // If we're in a campaign we render that view, otherwise we show a list of your campaigns
         if (this.currentPage.type === "Play" && this.currentPage.gameID) {
-        } else
+          const game = this.gameState!.joinedCampaigns[
+            this.currentPage.gameID!
+          ];
+          console.log(
+            `${game.name}\nID:${game.ID}, Password:${
+              game.password ?? "No password"
+            }`
+          );
+          const diceRolls =
+            this.gameState!.diceRolls[this.currentPage.gameID!] ?? [];
+          if (diceRolls.length)
+            console.log(
+              `Dice rolls:${diceRolls.reduce(
+                (pV, v) => `${pV}\n${v.roll} on a ${v.diceType} sided die`,
+                ""
+              )}`
+            );
+          inquirer
+            .prompt([
+              {
+                type: listType,
+                name: "choice",
+                choices: ["Roll dice", "Quit"],
+              },
+            ])
+            .then(({ choice }) => {
+              if (choice === "Roll dice" && this.currentPage.type === "Play") {
+                this.socketService.requestBuilders.diceRoll({
+                  diceType: 20,
+                  campaignID: this.currentPage.gameID!,
+                });
+              }
+            });
+        } else {
           inquirer
             .prompt([
               {
@@ -196,8 +242,12 @@ class Game {
               if (choice === "Back") {
                 this.currentPage = { type: "Menu" };
                 this.render();
+              } else if (this.currentPage.type === "Play") {
+                this.currentPage.gameID = choice;
+                this.render();
               }
             });
+        }
         return;
     }
   }

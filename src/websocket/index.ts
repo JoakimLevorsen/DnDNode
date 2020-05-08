@@ -3,11 +3,13 @@ import requestBuilder from "./requestBuilder";
 import { Campaign, isCampaign, isCampaignArray } from "./responses/Campaigns";
 import { GameState } from "./responses/GameState";
 import WebSocket from "ws";
+import { isDiceRoll, DiceRoll } from "./responses/DiceRoll";
 
 export class WebSocketService {
   private socket: WebSocket;
   private _username?: string;
   private fetchedCampaigns = new Map<number, Campaign>();
+  public recivedMessages = 0;
 
   constructor(
     private authListener: (value: boolean) => void,
@@ -16,7 +18,8 @@ export class WebSocketService {
     private fetchedCampaignsListener: (
       campaigns: Map<number, Campaign>
     ) => void,
-    private gameStateListener: (state: GameState) => void
+    private gameStateListener: (state: GameState) => void,
+    private newDiceRollListener: (roll: DiceRoll) => void
   ) {
     //   We do a little fiddelin to make it work
     process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = (0 as unknown) as string;
@@ -41,6 +44,7 @@ export class WebSocketService {
 
   private onMessage(msg: string) {
     console.log("Got message", msg);
+    this.recivedMessages++;
     try {
       const parsed = JSON.parse(msg);
       if (isLoginInfo(parsed)) {
@@ -56,6 +60,10 @@ export class WebSocketService {
       }
       if (isCampaignArray(parsed)) {
         this.joinableCampaignsListener(parsed);
+        return;
+      }
+      if (isDiceRoll(parsed)) {
+        this.newDiceRollListener(parsed);
         return;
       }
       // Since we've parsed some JSON, and the response was not the other types, this must be a gameState
